@@ -1,71 +1,225 @@
-# ai-code-reviewer README
+# AI Code Reviewer
 
-This is the README for your extension "ai-code-reviewer". After writing up a brief description, we recommend including the following sections.
+AI Code Reviewer is a Visual Studio Code extension that uses the Gemini API to analyze source code, identify bugs and edge cases, suggest improvements, highlight best practices, and generate corrected code.
+
+The project focuses on giving developers a clear and structured code review directly inside VS Code.
 
 ## Features
 
-Describe specific features of your extension including screenshots of your extension in action. Image paths are relative to this README file.
+* Review selected code or the entire current file
+* AI-powered bug and edge-case detection
+* Structured review results using JSON
+* Severity levels:
 
-For example if there is an image subfolder under your extension project workspace:
+  * Critical
+  * High
+  * Medium
+  * Low
+* Individual bug cards in the review panel
+* Overall code-quality assessment
+* Improvement suggestions
+* Relevant coding best practices
+* Complete suggested code fix
+* Copy the entire review to the clipboard
+* Apply the suggested fix directly to the editor
+* Protection against overwriting code that was modified after the review
+* Empty-file validation
+* Gemini API error handling
+* Fallback model support when a model is temporarily unavailable
+* Support for multiple programming languages
 
-\!\[feature X\]\(images/feature-x.png\)
+## How It Works
 
-> Tip: Many popular extensions utilize animations. This is an excellent way to show off your extension! We recommend short, focused animations that are easy to follow.
+The extension follows this flow:
 
-## Requirements
+```text
+Selected code / Current file
+        ↓
+VS Code Extension
+        ↓
+Review Prompt
+        ↓
+Gemini API + JSON Schema
+        ↓
+Structured JSON Response
+        ↓
+JSON.parse()
+        ↓
+ReviewResult Object
+        ↓
+VS Code Webview
+        ↓
+Bug Cards + Severity + Suggested Fix
+```
 
-If you have any requirements or dependencies, add a section describing those and how to install and configure them.
+Gemini is responsible for analyzing the code and generating review data.
 
-## Extension Settings
+The JSON schema defines the structure in which the AI should return that data.
 
-Include if your extension adds any VS Code settings through the `contributes.configuration` extension point.
+TypeScript processes the structured result, while the Webview controls how the review is presented to the user.
 
-For example:
+## Review Structure
 
-This extension contributes the following settings:
+A review contains:
 
-* `myExtension.enable`: Enable/disable this extension.
-* `myExtension.thing`: Set to `blah` to do something.
+* Overall Assessment
+* Bugs
+* Improvements
+* Best Practices
+* Suggested Fix
 
-## Known Issues
+Each detected bug contains:
 
-Calling out known issues can help limit users opening duplicate issues against your extension.
+* Title
+* Severity
+* Location
+* Problem
+* Why it matters
+* How to fix
 
-## Release Notes
+## Technologies Used
 
-Users appreciate release notes as you update your extension.
+* TypeScript
+* Visual Studio Code Extension API
+* Gemini API
+* `@google/genai`
+* HTML
+* CSS
+* JavaScript
+* dotenv
+* Git and GitHub
 
-### 1.0.0
+## Installation for Development
 
-Initial release of ...
+Clone the repository:
 
-### 1.0.1
+```bash
+git clone https://github.com/mithunkb1707-ops/ai-code-reviewer.git
+```
 
-Fixed issue #.
+Enter the project directory:
 
-### 1.1.0
+```bash
+cd ai-code-reviewer
+```
 
-Added features X, Y, and Z.
+Install dependencies:
 
----
+```bash
+npm install
+```
 
-## Following extension guidelines
+## Gemini API Key
 
-Ensure that you've read through the extensions guidelines and follow the best practices for creating your extension.
+Create a `.env` file in the project root:
 
-* [Extension Guidelines](https://code.visualstudio.com/api/references/extension-guidelines)
+```text
+GEMINI_API_KEY=your_api_key_here
+```
 
-## Working with Markdown
+The `.env` file is excluded from Git and should never be committed.
 
-You can author your README using Visual Studio Code. Here are some useful editor keyboard shortcuts:
+## Running the Extension
 
-* Split the editor (`Cmd+\` on macOS or `Ctrl+\` on Windows and Linux).
-* Toggle preview (`Shift+Cmd+V` on macOS or `Shift+Ctrl+V` on Windows and Linux).
-* Press `Ctrl+Space` (Windows, Linux, macOS) to see a list of Markdown snippets.
+Open the project in Visual Studio Code.
 
-## For more information
+Press:
 
-* [Visual Studio Code's Markdown Support](http://code.visualstudio.com/docs/languages/markdown)
-* [Markdown Syntax Reference](https://help.github.com/articles/markdown-basics/)
+```text
+F5
+```
 
-**Enjoy!**
+A new Extension Development Host window will open.
+
+Open a source-code file, select code if desired, and run the AI Code Reviewer command from the Command Palette.
+
+If no code is selected, the extension reviews the entire current file.
+
+## Apply Suggested Fix
+
+The extension can replace the reviewed code with Gemini's suggested corrected version.
+
+Before applying the fix, it checks whether the original reviewed code has changed.
+
+If the developer modified the code after the review was generated, the extension prevents the AI fix from overwriting those newer changes and asks the user to run another review.
+
+## Error Handling
+
+The extension handles common API problems including:
+
+* Missing API key
+* Authentication and permission errors
+* Rate limits
+* Unavailable models
+* Temporary service overload
+* Empty AI responses
+
+It can also attempt a fallback Gemini model when the primary model encounters a temporary availability error.
+
+## Tested With
+
+The extension has been tested with multiple file types including:
+
+* Python
+* JavaScript
+* JSON
+
+The architecture is language-independent, allowing the selected VS Code language identifier to be included in the AI review request.
+
+## Project Architecture
+
+The project separates responsibilities between components:
+
+**Prompt**
+Defines what Gemini should analyze.
+
+**JSON Schema**
+Defines how Gemini should structure its response.
+
+**ReviewResult / ReviewIssue**
+Define the expected TypeScript data structures.
+
+**Gemini API Layer**
+Sends the code for analysis and converts the JSON response into a structured object.
+
+**Webview**
+Displays the review, issue cards, severity information, improvements, best practices, and suggested fix.
+
+**Editor Integration**
+Handles applying corrected code back into the VS Code editor.
+
+## Security
+
+AI-generated content is escaped before being inserted into the Webview to reduce the risk of unintended HTML injection.
+
+The Gemini API key is stored in a local `.env` file and excluded through `.gitignore`.
+
+## Known Limitations
+
+* AI-generated reviews may occasionally contain inaccurate suggestions.
+* A Gemini API connection is required.
+* Review quality depends on the submitted code and available model.
+* Suggested fixes should still be reviewed by the developer before being applied.
+
+## Future Improvements
+
+Possible future improvements include:
+
+* Line-level diagnostics directly inside the VS Code editor
+* Review history
+* Configurable severity filters
+* Automatic review on save
+* More advanced code-fix previews
+* Support for project-wide reviews
+
+## Author
+
+**Mithun K B**
+
+Computer Science Engineering student
+
+GitHub: `mithunkb1707-ops`
+
+## Disclaimer
+
+AI Code Reviewer is intended as a developer-assistance tool. AI-generated reviews and fixes should be verified before being used in production code.
