@@ -194,6 +194,22 @@ AI-generated content is escaped before being inserted into the Webview to reduce
 
 The Gemini API key is stored in a local `.env` file and excluded through `.gitignore`.
 
+## Screenshots
+
+### Code Review Input
+
+![Code Review Input](screenshots/1.review-input.png)
+
+### Detected Issues
+
+![Detected Issues Part 1](screenshots/bug-cards-1.png)
+
+![Detected Issues Part 2](screenshots/bug-cards-2.png)
+
+### Suggested Fix
+
+![Suggested Fix](screenshots/suggested-fix.png)
+
 ## Known Limitations
 
 * AI-generated reviews may occasionally contain inaccurate suggestions.

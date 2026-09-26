@@ -89,55 +89,67 @@ const reviewSchema = {
 };
 
 async function reviewCode(prompt: string): Promise<ReviewResult> {
-	const { GoogleGenAI } = await import('@google/genai');
+  const apiKey = process.env.GEMINI_API_KEY;
 
-	const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    throw new Error('GEMINI_API_KEY is missing');
+  }
 
-	if (!apiKey) {
-		throw new Error('GEMINI_API_KEY is missing');
-	}
+  const response = await fetch(
+    'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent',
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': apiKey
+      },
+      body: JSON.stringify({
+        contents: [
+          {
+            parts: [
+              {
+                text: prompt
+              }
+            ]
+          }
+        ],
+        generationConfig: {
+          responseMimeType: 'application/json',
+          responseSchema: reviewSchema
+        }
+      })
+    }
+  );
 
-	const ai = new GoogleGenAI({ apiKey });
+  if (!response.ok) {
+    const errorText = await response.text();
 
-	const models = [
-	'gemini-3.8-flash',
-	'gemini-3.5-flash'
-];
+    const error = new Error(
+      `Gemini API error ${response.status}: ${errorText}`
+    );
 
-let lastError: unknown;
+    (error as Error & { status?: number }).status = response.status;
 
-for (const model of models) {
-	try {
-		const response = await ai.models.generateContent({
-			model,
-			contents: prompt,
+    throw error;
+  }
 
-			config: {
-				responseMimeType: 'application/json',
-				responseJsonSchema: reviewSchema
-			}
-		});
+  const data = await response.json() as {
+    candidates?: Array<{
+      content?: {
+        parts?: Array<{
+          text?: string;
+        }>;
+      };
+    }>;
+  };
 
-		const responseText = response.text;
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
 
-		if (!responseText) {
-			throw new Error('Gemini returned an empty response.');
-		}
+  if (!text) {
+    throw new Error('Gemini returned an empty response.');
+  }
 
-		return JSON.parse(responseText) as ReviewResult;
-
-	} catch (error) {
-		lastError = error;
-
-		const status = (error as { status?: number }).status;
-
-		if (status !== 503) {
-			throw error;
-		}
-	}
-}
-
-throw lastError;
+  return JSON.parse(text) as ReviewResult;
 }
 
 //Escape HTML special characters to prevent XSS in the webview
@@ -616,6 +628,28 @@ export function activate(context: vscode.ExtensionContext) {
 			const prompt = `
 You are a professional AI code reviewer.
 
+Return ONLY valid JSON matching this exact structure:
+
+{
+  "overallAssessment": "string",
+  "bugs": [
+    {
+      "title": "string",
+      "severity": "Critical | High | Medium | Low",
+      "location": "string",
+      "problem": "string",
+      "whyItMatters": "string",
+      "howToFix": "string"
+    }
+  ],
+  "improvements": ["string"],
+  "bestPractices": ["string"],
+  "suggestedFix": "string"
+}
+
+Do not use Markdown code fences.
+Do not add any text before or after the JSON.
+
 Review the following ${language} code carefully.
 
 Analyze the code for:
@@ -679,25 +713,25 @@ ${codeToReview}
 	const status = (error as { status?: number }).status;
 
 	if (status === 429) {
-		vscode.window.showWarningMessage(
-			'Gemini rate limit reached. Please wait and try again.'
-		);
-		return;
-	}
+  vscode.window.showWarningMessage(
+    'Gemini rate limit reached. Please wait and try again.'
+  );
+  return;
+}
 
-	if (status === 400 || status === 401 || status === 403) {
-		vscode.window.showErrorMessage(
-			'Gemini API authentication or permission error.'
-		);
-		return;
-	}
+if (status === 400 || status === 401 || status === 403) {
+  vscode.window.showErrorMessage(
+    'Gemini API authentication or permission error.'
+  );
+  return;
+}
 
-	if (status === 404) {
-		vscode.window.showErrorMessage(
-			'The configured Gemini model is unavailable.'
-		);
-		return;
-	}
+if (status === 404) {
+  vscode.window.showErrorMessage(
+    'The configured Gemini model is unavailable.'
+  );
+  return;
+}
 
 	const message =
 		error instanceof Error
