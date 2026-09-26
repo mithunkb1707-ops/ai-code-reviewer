@@ -95,34 +95,64 @@ async function reviewCode(prompt: string): Promise<ReviewResult> {
     throw new Error('GEMINI_API_KEY is missing');
   }
 
-  const response = await fetch(
-    'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent',
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-goog-api-key': apiKey
-      },
-      body: JSON.stringify({
-        contents: [
-          {
-            parts: [
-              {
-                text: prompt
-              }
-            ]
-          }
-        ],
-        generationConfig: {
-          responseMimeType: 'application/json',
-          responseSchema: reviewSchema
-        }
-      })
-    }
-  );
+  const maxAttempts = 3;
 
-  if (!response.ok) {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const response = await fetch(
+      'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': apiKey
+        },
+        body: JSON.stringify({
+          contents: [
+            {
+              parts: [
+                {
+                  text: prompt
+                }
+              ]
+            }
+          ],
+          generationConfig: {
+            responseMimeType: 'application/json',
+            responseSchema: reviewSchema
+          }
+        })
+      }
+    );
+
+    if (response.ok) {
+      const data = await response.json() as {
+        candidates?: Array<{
+          content?: {
+            parts?: Array<{
+              text?: string;
+            }>;
+          };
+        }>;
+      };
+
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+
+      if (!text) {
+        throw new Error('Gemini returned an empty response.');
+      }
+
+      return JSON.parse(text) as ReviewResult;
+    }
+
     const errorText = await response.text();
+
+    if ((response.status === 503 || response.status === 429) &&
+        attempt < maxAttempts) {
+      await new Promise(resolve =>
+        setTimeout(resolve, 2000 * Math.pow(2, attempt - 1))
+      );
+      continue;
+    }
 
     const error = new Error(
       `Gemini API error ${response.status}: ${errorText}`
@@ -133,23 +163,7 @@ async function reviewCode(prompt: string): Promise<ReviewResult> {
     throw error;
   }
 
-  const data = await response.json() as {
-    candidates?: Array<{
-      content?: {
-        parts?: Array<{
-          text?: string;
-        }>;
-      };
-    }>;
-  };
-
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-
-  if (!text) {
-    throw new Error('Gemini returned an empty response.');
-  }
-
-  return JSON.parse(text) as ReviewResult;
+  throw new Error('Gemini request failed after multiple attempts.');
 }
 
 //Escape HTML special characters to prevent XSS in the webview
