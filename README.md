@@ -1,6 +1,6 @@
 # AI Code Reviewer
 
-AI Code Reviewer is a Visual Studio Code extension that uses the Gemini API to analyze source code, identify bugs and edge cases, suggest improvements, highlight best practices, and generate corrected code.
+AI Code Reviewer is a Visual Studio Code extension that uses the Gemini API to analyze source code, identify bugs and edge cases, suggest improvements, highlight best practices, analyze performance, and generate corrected code.
 
 The project focuses on giving developers a clear and structured code review directly inside VS Code.
 
@@ -10,13 +10,18 @@ The project focuses on giving developers a clear and structured code review dire
 * AI-powered bug and edge-case detection
 * Structured review results using JSON
 * Severity levels:
-
   * Critical
   * High
   * Medium
   * Low
 * Individual bug cards in the review panel
+* Overall code-quality rating out of 100
 * Overall code-quality assessment
+* Runtime impact classification (Low, Medium, High)
+* Time complexity analysis using Big-O notation
+* Estimated runtime behavior and performance analysis
+* Identification of performance bottlenecks
+* Explanations of operations that may slow execution
 * Improvement suggestions
 * Relevant coding best practices
 * Complete suggested code fix
@@ -33,7 +38,7 @@ The project focuses on giving developers a clear and structured code review dire
 The extension follows this flow:
 
 ```text
-Selected code / Current file
+Selected Code / Current File
         ↓
 VS Code Extension
         ↓
@@ -49,7 +54,9 @@ ReviewResult Object
         ↓
 VS Code Webview
         ↓
-Bug Cards + Severity + Suggested Fix
+Code Quality Rating + Runtime Analysis
+        ↓
+Bug Cards + Improvements + Suggested Fix
 ```
 
 Gemini is responsible for analyzing the code and generating review data.
@@ -62,7 +69,13 @@ TypeScript processes the structured result, while the Webview controls how the r
 
 A review contains:
 
+* Overall Code Quality Rating (0–100)
 * Overall Assessment
+* Runtime Impact
+* Time Complexity
+* Estimated Runtime
+* Performance Analysis
+* Performance Issues
 * Bugs
 * Improvements
 * Best Practices
@@ -76,6 +89,13 @@ Each detected bug contains:
 * Problem
 * Why it matters
 * How to fix
+
+Each detected performance issue contains:
+
+* Title
+* Location
+* Performance impact
+* Explanation of the bottleneck
 
 ## Technologies Used
 
@@ -171,21 +191,27 @@ The architecture is language-independent, allowing the selected VS Code language
 The project separates responsibilities between components:
 
 **Prompt**
-Defines what Gemini should analyze.
+
+Defines what Gemini should analyze, including code quality, correctness, and performance.
 
 **JSON Schema**
-Defines how Gemini should structure its response.
+
+Defines how Gemini should structure its response, including ratings, performance analysis, bugs, and suggested fixes.
 
 **ReviewResult / ReviewIssue**
+
 Define the expected TypeScript data structures.
 
 **Gemini API Layer**
+
 Sends the code for analysis and converts the JSON response into a structured object.
 
 **Webview**
-Displays the review, issue cards, severity information, improvements, best practices, and suggested fix.
+
+Displays the code-quality rating, runtime impact, time complexity, estimated runtime analysis, performance issues, bug cards, severity information, improvements, best practices, and suggested fixes.
 
 **Editor Integration**
+
 Handles applying corrected code back into the VS Code editor.
 
 ## Security
@@ -215,6 +241,9 @@ The Gemini API key is stored in a local `.env` file and excluded through `.gitig
 * AI-generated reviews may occasionally contain inaccurate suggestions.
 * A Gemini API connection is required.
 * Review quality depends on the submitted code and available model.
+* Time-complexity analysis may be inaccurate for complex algorithms or library operations.
+* Runtime estimates are based on AI code analysis and are not measured execution times.
+* Actual execution time depends on factors such as input size, hardware, and runtime environment.
 * Suggested fixes should still be reviewed by the developer before being applied.
 
 ## Future Improvements
