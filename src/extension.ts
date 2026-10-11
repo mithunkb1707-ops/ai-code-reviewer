@@ -16,19 +16,73 @@ interface ReviewIssue {
 
 //describe the whole ai code review result, including overall assessment, list of bugs, improvements, best practices, and suggested fix
 interface ReviewResult {
-	overallAssessment: string;
-	bugs: ReviewIssue[];
-	improvements: string[];
-	bestPractices: string[];
-	suggestedFix: string;
+    overallRating: number;
+    overallAssessment: string;
+
+    runtimeImpact: 'Low' | 'Medium' | 'High';
+    timeComplexity: string;
+    estimatedRuntime: string;
+    performanceAnalysis: string;
+    performanceIssues: {
+        title: string;
+        location: string;
+        impact: string;
+        explanation: string;
+    }[];
+
+    bugs: ReviewIssue[];
+    improvements: string[];
+    bestPractices: string[];
+    suggestedFix: string;
 }
 
 //creating gemini schema for the review result, to validate the ai response and ensure it follows the expected structure
+
 const reviewSchema = {
 	type: 'object',
 	properties: {
+		overallRating: {
+			type: 'integer'
+		},
+
 		overallAssessment: {
 			type: 'string'
+		},
+
+		runtimeImpact: {
+			type: 'string',
+			enum: ['Low', 'Medium', 'High']
+		},
+
+		timeComplexity: {
+			type: 'string'
+		},
+
+		estimatedRuntime: {
+			type: 'string'
+		},
+
+		performanceAnalysis: {
+			type: 'string'
+		},
+
+		performanceIssues: {
+			type: 'array',
+			items: {
+				type: 'object',
+				properties: {
+					title: { type: 'string' },
+					location: { type: 'string' },
+					impact: { type: 'string' },
+					explanation: { type: 'string' }
+				},
+				required: [
+					'title',
+					'location',
+					'impact',
+					'explanation'
+				]
+			}
 		},
 
 		bugs: {
@@ -80,13 +134,20 @@ const reviewSchema = {
 	},
 
 	required: [
+		'overallRating',
 		'overallAssessment',
+		'runtimeImpact',
+		'timeComplexity',
+		'estimatedRuntime',
+		'performanceAnalysis',
+		'performanceIssues',
 		'bugs',
 		'improvements',
 		'bestPractices',
 		'suggestedFix'
 	]
 };
+
 
 async function reviewCode(prompt: string): Promise<ReviewResult> {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -186,6 +247,34 @@ function showReviewPanel(
 const issueCount = review.bugs.length;
 const originalReviewedCode = editor.document.getText(targetRange);
 const safeOverall = escapeHtml(review.overallAssessment);
+const safeRating = Math.max(
+	0,
+	Math.min(100, Number(review.overallRating) || 0)
+);
+
+const safeRuntimeImpact = escapeHtml(review.runtimeImpact);
+const safeTimeComplexity = escapeHtml(review.timeComplexity);
+const safeEstimatedRuntime = escapeHtml(review.estimatedRuntime);
+const safePerformanceAnalysis = escapeHtml(review.performanceAnalysis);
+
+const performanceIssues = review.performanceIssues ?? [];
+
+const performanceIssueCards = performanceIssues.length === 0
+	? '<div class="no-issues">No significant performance bottlenecks identified.</div>'
+	: performanceIssues.map(issue => `
+		<div class="bug-item">
+			<div class="bug-title">${escapeHtml(issue.title)}</div>
+			<div class="bug-detail">
+				<strong>Location:</strong> ${escapeHtml(issue.location)}
+			</div>
+			<div class="bug-detail">
+				<strong>Impact:</strong> ${escapeHtml(issue.impact)}
+			</div>
+			<div class="bug-detail">
+				<strong>Explanation:</strong> ${escapeHtml(issue.explanation)}
+			</div>
+		</div>
+	`).join('');
 const bugCards =
 	review.bugs.length === 0
 		? '<div class="no-issues">No major bugs found.</div>'
@@ -419,6 +508,63 @@ panel.webview.html = `
 button:hover {
 	background: var(--vscode-button-hoverBackground);
 }
+	.rating-score {
+	font-size: 32px;
+	font-weight: 800;
+	margin-bottom: 12px;
+}
+
+.rating-score span {
+	font-size: 16px;
+	font-weight: 500;
+	opacity: 0.7;
+}
+
+.rating-meter {
+	width: 100%;
+	height: 8px;
+	border-radius: 8px;
+	overflow: hidden;
+	background: var(--vscode-panel-border);
+}
+
+.rating-meter-fill {
+	height: 100%;
+	background: var(--vscode-progressBar-background);
+	transition: width 0.2s ease;
+}
+
+.performance-metrics {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+	gap: 12px;
+	margin-bottom: 16px;
+}
+
+.metric-card {
+	padding: 12px;
+	border-radius: 8px;
+	background: var(--vscode-editor-background);
+	border: 1px solid var(--vscode-panel-border);
+	min-width: 0;
+}
+
+.metric-label {
+	font-size: 11px;
+	text-transform: uppercase;
+	opacity: 0.7;
+	margin-bottom: 8px;
+}
+
+.metric-value {
+	font-size: 16px;
+	font-weight: 700;
+	overflow-wrap: anywhere;
+}
+
+.performance {
+	border-left: 4px solid var(--vscode-progressBar-background);
+}
 	</style>
 </head>
 
@@ -455,6 +601,52 @@ button:hover {
 		<div class="section-title">
 			Overall Assessment
 		</div>
+	<div class="section-card">
+	<div class="section-title">Overall Code Quality Rating</div>
+
+	<div class="rating-score">
+		${safeRating}<span> / 100</span>
+	</div>
+
+	<div class="rating-meter">
+		<div
+			class="rating-meter-fill"
+			style="width: ${safeRating}%">
+		</div>
+	</div>
+</div>
+
+<div class="section-card performance">
+	<div class="section-title">Runtime & Performance Analysis</div>
+
+	<div class="performance-metrics">
+		<div class="metric-card">
+			<div class="metric-label">Runtime Impact</div>
+			<div class="metric-value">${safeRuntimeImpact}</div>
+		</div>
+
+		<div class="metric-card">
+			<div class="metric-label">Time Complexity</div>
+			<div class="metric-value">${safeTimeComplexity}</div>
+		</div>
+	</div>
+
+	<div class="section-title">Performance Explanation</div>
+	<div class="section-content">${safePerformanceAnalysis}</div>
+
+	<div class="section-title" style="margin-top: 18px">
+		Estimated Runtime
+	</div>
+	<div class="section-content">${safeEstimatedRuntime}</div>
+
+	<div class="section-title" style="margin-top: 18px">
+		Performance Issues
+	</div>
+
+	<div class="bugs-container">
+		${performanceIssueCards}
+	</div>
+</div>
 
 		<div class="section-content">${safeOverall}</div>
 	</div>
@@ -528,8 +720,31 @@ How to fix: ${bug.howToFix}`;
 			})
 			.join('\n\n');
 			const reviewForClipboard = `
+Overall Code Quality Rating
+${safeRating}/100
+
 Overall Assessment
 ${review.overallAssessment}
+
+Runtime Impact
+${review.runtimeImpact}
+
+Time Complexity
+${review.timeComplexity}
+
+Performance Analysis
+${review.performanceAnalysis}
+
+Estimated Runtime
+${review.estimatedRuntime}
+
+Performance Issues
+${review.performanceIssues.map(issue =>
+	`${issue.title}
+Location: ${issue.location}
+Impact: ${issue.impact}
+Explanation: ${issue.explanation}`
+).join('\n\n') || 'No significant performance bottlenecks identified.'}
 
 Bugs
 ${bugsForClipboard}
@@ -555,24 +770,41 @@ panel.webview.onDidReceiveMessage(
 				'AI code review copied to clipboard.'
 			);
 		}
-		if (message.command === 'applyFix') {
+		
+if (message.command === 'applyFix') {
+	const rawFix = typeof review.suggestedFix === 'string'
+		? review.suggestedFix.trim()
+		: '';
 
-	const fix = review.suggestedFix.trim();
-
-if (!fix || /^no\s+fix\s+required/i.test(fix)) {
-	vscode.window.showInformationMessage(
-		'No suggested fix is available.'
+	// Remove Markdown fences if Gemini unexpectedly includes them.
+	const fencedFix = rawFix.match(
+		/^```[^\r\n]*\r?\n([\s\S]*?)\r?\n```$/
 	);
-	return;
-}
+	const fix = (fencedFix ? fencedFix[1] : rawFix).trim();
+
+	if (!fix || /^no\s+fix\s+required\.?$/i.test(fix)) {
+		vscode.window.showInformationMessage(
+			'No suggested fix is available.'
+		);
+		return;
+	}
+
 	const currentCode = editor.document.getText(targetRange);
 
-if (currentCode !== originalReviewedCode) {
-	vscode.window.showWarningMessage(
-		'The reviewed code has changed since the AI review. Run the review again before applying the fix.'
-	);
-	return;
-}
+	if (currentCode !== originalReviewedCode) {
+		vscode.window.showWarningMessage(
+			'The reviewed code has changed. Run the review again before applying the fix.'
+		);
+		return;
+	}
+
+	if (fix === currentCode) {
+		vscode.window.showInformationMessage(
+			'The suggested fix is identical to the current code. No changes were needed.'
+		);
+		return;
+	}
+
 	const choice = await vscode.window.showWarningMessage(
 		'Apply the AI suggested fix to the reviewed code?',
 		{ modal: true },
@@ -583,14 +815,35 @@ if (currentCode !== originalReviewedCode) {
 		return;
 	}
 
-	await editor.edit(editBuilder => {
-		editBuilder.replace(targetRange, fix);
-	});
+	try {
+		const applied = await editor.edit(editBuilder => {
+			editBuilder.replace(targetRange, fix);
+		});
 
-	vscode.window.showInformationMessage(
-		'Suggested fix applied.'
-	);
+		if (!applied) {
+			vscode.window.showErrorMessage(
+				'VS Code rejected the edit. Check whether the document is read-only or the edit is otherwise unavailable.'
+			);
+			console.error('Apply Fix failed: editor.edit() returned false.');
+			return;
+		}
+
+		vscode.window.showInformationMessage(
+			'Suggested fix applied successfully.'
+		);
+	} catch (error) {
+		const details = error instanceof Error
+			? error.message
+			: String(error);
+
+		console.error('Apply Fix failed:', error);
+
+		vscode.window.showErrorMessage(
+			`Failed to apply suggested fix: ${details}`
+		);
+	}
 }
+
 	}
 );
 }
@@ -639,65 +892,91 @@ export function activate(context: vscode.ExtensionContext) {
 				return;
 			}
 			//The prompt im giving to the ai 
-			const prompt = `
-You are a professional AI code reviewer.
+			
+const prompt = `
+You are a professional AI code reviewer and performance analyst.
 
-Return ONLY valid JSON matching this exact structure:
-
-{
-  "overallAssessment": "string",
-  "bugs": [
-    {
-      "title": "string",
-      "severity": "Critical | High | Medium | Low",
-      "location": "string",
-      "problem": "string",
-      "whyItMatters": "string",
-      "howToFix": "string"
-    }
-  ],
-  "improvements": ["string"],
-  "bestPractices": ["string"],
-  "suggestedFix": "string"
-}
-
+Return ONLY valid JSON matching the exact response schema provided.
 Do not use Markdown code fences.
 Do not add any text before or after the JSON.
 
 Review the following ${language} code carefully.
 
-Analyze the code for:
-- actual bugs and important edge cases,
-- reliability and maintainability improvements,
-- relevant best practices,
-- and meaningful corrections.
+1. OVERALL CODE QUALITY RATING
+- Assign overallRating an integer from 0 to 100.
+- Evaluate correctness (40%), efficiency (25%), readability (15%),
+  maintainability (10%), and best practices (10%).
+- Base the score on evidence in the submitted code.
+- Do not arbitrarily assign high scores or invent problems.
+- Explain the main reasons for the score in overallAssessment.
 
-For every bug:
-- give it a short descriptive title,
-- assign a severity of Critical, High, Medium, or Low,
-- identify where it occurs,
-- clearly explain the problem,
-- explain why it matters,
-- and explain how to fix it.
+2. PERFORMANCE AND RUNTIME ANALYSIS
+- Identify actual performance bottlenecks or operations that could
+  significantly increase execution time.
+- Examine nested loops, recursion, repeated computations,
+  inefficient searches, unnecessary sorting, expensive I/O, and
+  repeated function calls where relevant.
+- runtimeImpact must be Low, Medium, or High, based on the
+  significance of the identified performance concerns.
+- Explain the overall performance characteristics in
+  performanceAnalysis.
+- For each meaningful performance issue, provide:
+  title: a concise description of the bottleneck;
+  location: the relevant line, loop, function, or code section;
+  impact: how it affects execution time;
+  explanation: why it occurs and how it could be improved.
+- Return an empty performanceIssues array if no meaningful
+  performance bottlenecks are found.
+- Do not label normal code operations as errors without reason.
+- Distinguish performance bottlenecks from correctness bugs.
 
-Do not invent bugs.
+3. TIME COMPLEXITY
+- Determine the likely time complexity using Big-O notation,
+  such as O(1), O(log n), O(n), O(n log n), or O(n^2).
+- Explain how execution work grows with input size.
+- Consider loops, nested loops, recursion, function calls,
+  and relevant library or data-structure operations.
+- State any assumptions about input size or implementation.
+- If complexity cannot be determined confidently, explain why
+  instead of inventing a result.
 
-For improvements and best practices:
-- only include advice that is relevant to the submitted code,
-- avoid generic or unnecessary suggestions,
-- explain things clearly enough for a beginner to understand.
+4. ESTIMATED RUNTIME
+- Explain the likely execution-time behavior in estimatedRuntime.
+- Do not fabricate exact execution times in milliseconds or seconds.
+- Actual runtime depends on input size, hardware, environment,
+  programming language, and runtime conditions.
+- If actual time cannot be determined from static code analysis,
+  explicitly state that benchmarking with defined inputs is needed.
+- Where meaningful, describe which operations are likely to
+  dominate runtime and how performance changes with input size.
 
-For suggestedFix:
-- if meaningful corrections are required, return the complete corrected code,
-- preserve proper indentation and normal line breaks,
-- format the code exactly as it should appear in a real source file,
-- never minify or compress the code into a single line,
-- do not use Markdown code fences,
-- if no fix is required, return "No fix required."
+5. BUGS AND EDGE CASES
+- Identify actual bugs, reliability issues, and important edge cases.
+- For each bug, provide title, severity, location, problem,
+  whyItMatters, and howToFix.
+- Severity must be Critical, High, Medium, or Low.
+- Do not invent bugs. Return an empty bugs array if none are found.
+
+6. IMPROVEMENTS AND BEST PRACTICES
+- Include only relevant and actionable suggestions.
+- Avoid generic, repetitive, or unnecessary advice.
+- Explain recommendations clearly enough for a beginner.
+
+7. SUGGESTED FIX
+- If meaningful corrections are needed, return the complete
+  corrected code in suggestedFix.
+- Preserve the original programming language and proper indentation.
+- Do not use Markdown code fences.
+- Do not claim that code was executed or tested.
+- If no fix is required, return "No fix required."
+
+Ensure every required field in the response schema is present
+and has the correct type.
 
 Code:
 ${codeToReview}
 `;
+
 			console.log(prompt);
 
 			// Show a progress notification while the AI is reviewing the code
