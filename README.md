@@ -226,7 +226,7 @@ The Gemini API key is stored in a local `.env` file and excluded through `.gitig
 
 ![Code Review Input](screenshots/1.review-input.png)
 
-### Detected Issues
+### Detected Issues & New rating and performance analysis
 
 ![Detected Issues Part 1](screenshots/bug-cards-1.png)
 
